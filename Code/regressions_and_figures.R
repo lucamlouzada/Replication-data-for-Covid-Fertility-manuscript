@@ -94,8 +94,8 @@ fdf$week = factor(fdf$week)
 
 # First columns
 data = filter(fdf, msm10 == 0)
-m1 = feols(dlb ~ disol| week, cluster = "codmun6", data = data,
-      weights = data$popm) 
+m1 = felm(dlb ~ disol | week| 0 | codmun6, data = data,
+          weights = data$popm, cmethod = "reghdfe")
 
 data = filter(fdf, msm10 == 0)
 m2 = felm(dlb ~ disol + dlm| week| 0 | codmun6, data = data,
