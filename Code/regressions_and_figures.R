@@ -458,7 +458,7 @@ ggplot(data = tbl, aes(x = factor(year), y = estimate)) + geom_point() +
 # We use numbers calculated by Stata (see file Margins.do)
 
 # Main regression (column 4)
-#  margins, at(disol=(-0.05 -0.019 0 0.026 0.09))
+#  margins, at(disol=(-0.05 -0.019 0 0.026 0.05 0.09))
 #------------------------------------------------------------------------------
 #|            Delta-method
 #|     Margin   Std. Err.      z    P>|z|     [95% Conf. Interval]
