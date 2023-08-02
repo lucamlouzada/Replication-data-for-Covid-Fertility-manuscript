@@ -1,9 +1,9 @@
 # main_dataset.R
 
 # Author: Luca Moreno-Louzada
-# 2021
+# 2023
 # Code for manuscript:
-# "Staying at Home during Covid Outbreaks Leads to Less Conceptions"
+# "The relationship between staying at home during the pandemic and the number of conceptions: a national panel data analysis"
 # Luca Moreno-Louzada and Naercio Menezes-Filho
 
 
@@ -21,7 +21,7 @@
 
 rm(list = ls())
 
-setwd("C:/Users/lucam/OneDrive/Área de Trabalho/Economia/COVID SINASC")
+setwd("P:/Luca Louzada/COVID-19 Births/Final")
 
 library(dplyr) # data wrangling
 library(read.dbc) # read .dbc files
@@ -43,6 +43,7 @@ library(lfe) # fixed effects models
 library(sf) # dealing with maps
 
 options(scipen = 999) # disable scientific notation
+memory.limit(size = 64000)
 
 ###########################################################################
 
@@ -163,18 +164,18 @@ births$year = year(births$conc_date)
 births = left_join(microregions, births, by = "codmun6") 
 
 # Filter to remove missing data and input errors
-births = births %>% filter(!(is.na(births$delivery))) #  31,469 rows (<1%)
-births = births %>% filter(!(is.na(births$bweight))) # 10,574 rows (<1%)
-births = births %>% filter(!(is.na(births$bweeks))) # 766,569 rows (3%)
-births = births %>% filter(mother_educ < 9) # 452,525 rows (2%)
-births = births %>% filter(between(mother_age, 10, 85)) # 255 rows (<1%)
+births = births %>% filter(!(is.na(births$delivery))) #  33,040 rows (<1%)
+births = births %>% filter(!(is.na(births$bweight))) # 10,919 rows (<1%)
+births = births %>% filter(!(is.na(births$bweeks))) # 791,301 rows (3%)
+births = births %>% filter(mother_educ < 9) # 492,583 rows (2%)
+births = births %>% filter(between(mother_age, 10, 85)) # 274 rows (<1%)
 
 # Filter to remove 3 microregions with too few observations
 births = births %>% filter(microregion != 26019) # Fernando de Noronha - PE
 births = births %>% filter(microregion != 27007 ) # Traipu - AL          
 births = births %>% filter(microregion != 35006 ) # Auriflama - SP         
 
-births20 = births %>% filter(year == 2020)
+births20 = births %>% filter(year >= 2020)
 
 # Deaths
 deaths = fread("deathdata.csv", 
@@ -196,15 +197,19 @@ deaths20 = deaths %>% filter(year == 2020)
 # Fetal deaths
 fetal = fread("fetaldeathdata.csv", 
               colClasses = c(V1 = "character",
-                             V2 = "character")) 
+                             V2 = "character",
+                             V3 = "numeric",
+                             V4 = "numeric",
+                             V5 = "numeric",
+                             V6 = "numeric",
+                             V7 = "numeric"
+                             )) 
 
 names(fetal) = c("codmun6", "date", "bweeks", "delivery", "mother_educ",
                  "mother_age", "kids")
 
 # For 2021 data we need to filter the total deaths dataset for fetal deaths
-fetal21 = fread("do2021opendata.csv",
-                colClasses = c(CODMUNRES = "character",
-                               DTOBITO = "character")) %>% 
+fetal21 = read.dbf("DO21OPEN.dbf", as.is = TRUE) %>% 
           filter(TIPOBITO == 1) %>% 
           select(CODMUNRES, DTOBITO, SEMAGESTAC, OBITOPARTO,
                  ESCMAE2010, IDADEMAE, QTDFILVIVO)
@@ -214,10 +219,17 @@ names(fetal21) = c("codmun6", "date", "bweeks", "delivery", "mother_educ",
 
 # Join both
 fetal = rbind(fetal, fetal21)
+fetal$bweeks = as.numeric(as.character(fetal$bweeks))
 
-fetal = fetal %>% filter(!(is.na(bweeks))) #  24,951 rows (9%)
-fetal = fetal %>% filter(!(is.na(mother_educ))) # 22,622 rows (9%)
-fetal = fetal %>% filter(!(is.na(mother_age))) #  4,776 rows (2%)
+fetal = fetal %>% filter(!(is.na(bweeks))) #  25,999 rows (8%)
+fetal = fetal %>% filter(!(is.na(mother_educ))) # 23,933 rows (9%)
+fetal = fetal %>% filter(!(is.na(mother_age))) #  5,064 rows (2%)
+
+# Fix column types
+fetal$mother_educ = as.numeric(fetal$mother_educ)
+fetal$mother_age  = as.numeric(fetal$mother_age )
+fetal$kids  = as.numeric(fetal$kids )
+fetal$delivery  = as.numeric(fetal$delivery)
 
 # Calculate conception date, month and year
 fetal$date = as.Date(as.character(fetal$date), format = "%d%m%Y")
@@ -327,6 +339,10 @@ births_mun = births20 %>% group_by(codmun6, week) %>%
              summarise(nconcep = n(),
                        nconcep_educ_low = sum(mother_educ < 3),
                        nconcep_educ_high = sum(mother_educ >= 3),
+                       nconcep_age_first = sum(mother_age < 21),
+                       nconcep_age_second = sum(between(mother_age, 21, 25)),
+                       nconcep_age_third = sum(between(mother_age, 26, 32)),
+                       nconcep_age_fourth = sum(mother_age > 32),
                        nconcep_age_young = sum(mother_age < 25),
                        nconcep_age_old = sum(mother_age >= 25),
                        nconcep_kids_no = sum(kids == 0, na.rm = T),
@@ -335,6 +351,10 @@ births_mun = births20 %>% group_by(codmun6, week) %>%
              complete(codmun6, week, fill = list(nconcep = 0,
                                                  nconcep_educ_low = 0,
                                                  nconcep_educ_high = 0,
+                                                 nconcep_age_first = 0,
+                                                 nconcep_age_second = 0,
+                                                 nconcep_age_third = 0,
+                                                 nconcep_age_fourth = 0,
                                                  nconcep_age_young = 0,
                                                  nconcep_age_old = 0,
                                                  nconcep_kids_no = 0,
@@ -349,6 +369,10 @@ fetal_mun = fetal20 %>% group_by(codmun6, week) %>%
             summarise(nfetal = n(),
                       nfetal_educ_low = sum(mother_educ < 3),
                       nfetal_educ_high = sum(mother_educ >= 3),
+                      nfetal_age_first = sum(mother_age < 21),
+                      nfetal_age_second = sum(between(mother_age, 21, 25)),
+                      nfetal_age_third = sum(between(mother_age, 26, 32)),
+                      nfetal_age_fourth = sum(mother_age > 32),
                       nfetal_age_young = sum(mother_age < 25),
                       nfetal_age_old = sum(mother_age >= 25),
                       nfetal_kids_no = sum(kids == 0, na.rm = T),
@@ -357,6 +381,10 @@ fetal_mun = fetal20 %>% group_by(codmun6, week) %>%
             complete(codmun6, week, fill = list(nfetal = 0,
                                                 nfetal_educ_low = 0,
                                                 nfetal_educ_high = 0,
+                                                nfetal_age_first = 0,
+                                                nfetal_age_second = 0,
+                                                nfetal_age_third = 0,
+                                                nfetal_age_fourth = 0,
                                                 nfetal_age_young = 0,
                                                 nfetal_age_old = 0,
                                                 nfetal_kids_no = 0,
@@ -370,6 +398,10 @@ births_mun = left_join(births_mun, fetal_mun, by = c("codmun6", "week"))
 births_mun$nfetal[is.na(births_mun$nfetal)] = 0
 births_mun$nfetal_educ_low[is.na(births_mun$nfetal_educ_low)] = 0
 births_mun$nfetal_educ_high[is.na(births_mun$nfetal_educ_high)] = 0
+births_mun$nfetal_age_first[is.na(births_mun$nfetal_age_first)] = 0
+births_mun$nfetal_age_second[is.na(births_mun$nfetal_age_second)] = 0
+births_mun$nfetal_age_third[is.na(births_mun$nfetal_age_third)] = 0
+births_mun$nfetal_age_fourth[is.na(births_mun$nfetal_age_fourth)] = 0
 births_mun$nfetal_age_young[is.na(births_mun$nfetal_age_young)] = 0
 births_mun$nfetal_age_old[is.na(births_mun$nfetal_age_old)] = 0
 births_mun$nfetal_kids_no[is.na(births_mun$nfetal_kids_no)] = 0
@@ -378,6 +410,11 @@ births_mun$nfetal_kids_more[is.na(births_mun$nfetal_kids_more)] = 0
 births_mun$totalconcep = births_mun$nconcep + births_mun$nfetal
 births_mun$totalconcep_educ_low = births_mun$nconcep_educ_low + births_mun$nfetal_educ_low
 births_mun$totalconcep_educ_high = births_mun$nconcep_educ_high + births_mun$nfetal_educ_high
+births_mun$totalconcep_age_first = births_mun$nconcep_age_first + births_mun$nfetal_age_first
+births_mun$totalconcep_age_second = births_mun$nconcep_age_second + births_mun$nfetal_age_second
+births_mun$totalconcep_age_third = births_mun$nconcep_age_third + births_mun$nfetal_age_third
+births_mun$totalconcep_age_fourth = births_mun$nconcep_age_fourth + births_mun$nfetal_age_fourth
+
 births_mun$totalconcep_age_young = births_mun$nconcep_age_young + births_mun$nfetal_age_young
 births_mun$totalconcep_age_old = births_mun$nconcep_age_old + births_mun$nfetal_age_old
 births_mun$totalconcep_kids_no = births_mun$nconcep_kids_no + births_mun$nfetal_kids_no
@@ -412,7 +449,7 @@ isolation_mun = isolation %>%
 data_mun = left_join(data_mun, deaths_mun, by = c("codmun6", "week")) %>% 
            ungroup()
 
-# Add log GDP and log population
+ # Add log GDP and log population
 data_mun$lgdp = log(data_mun$gdpc)
 data_mun$lpop = log(data_mun$popm)
 
@@ -434,11 +471,11 @@ data_mun = data_mun %>% group_by(codmun6) %>%
            filter(sum(isolated, na.rm = TRUE) != 0) %>% ungroup()
 
 # Keep relevant weeks
-data_mun = data_mun %>% filter(between(week, 5, 21))
+data_mun = data_mun %>% filter(between(week, 5, 29))
 
 # Save
-write.csv(data_mun, "data_2020_mun.csv")
-write.dta(data_mun, "data_2020_mun.dta")
+write.csv(data_mun, "data_2020_mun_final.csv")
+write.dta(data_mun, "data_2020_mun_final.dta")
 
 ###########################################################################
 
@@ -538,10 +575,10 @@ data_mic$month = month(data_mic$s_date)
 data_mic = data_mic %>% group_by(microregion) %>% 
            filter(sum(isolated, na.rm = TRUE) != 0) 
 
-data_mic = data_mic %>% filter(between(week, 5, 21))
+data_mic = data_mic %>% filter(between(week, 5, 29))
 
 # Save
-write.csv(data_mic, "data_2020_mic.csv")
+write.csv(data_mic, "data_2020_mic_new.csv")
 
 ###########################################################################
 
@@ -627,10 +664,10 @@ data_all = left_join(data_all, isolation_all, by = c("codmun6", "month"))
 data_all = data_all %>% group_by(codmun6) %>% 
            filter(sum(isolated, na.rm = TRUE) != 0) 
 
-data_all = data_all %>% filter(between(month, 2, 5))
+data_all = data_all %>% filter(between(month, 2, 7))
 
 # Save
-write.csv(data_all, "data_monthly_mun.csv")
+write.csv(data_all, "data_monthly_mun_new.csv")
 
 ###########################################################################
 
@@ -677,7 +714,7 @@ births_yr = births_yr %>%
                                              as.Date("2011-12-30"))/7))))
 
 births_yr = births_yr %>% filter(year > 2011) %>% 
-            filter(between(week, 5, 21)) %>% 
+            filter(between(week, 5, 29)) %>% 
             group_by(codmun6, year, week) %>% 
             summarise(nconcep = n()) %>% 
             ungroup()
@@ -724,7 +761,7 @@ fetal_yr = fetal_yr %>%
                                             as.Date("2011-12-30"))/7))))
 
 fetal_yr = fetal_yr %>% filter(year > 2011) %>% 
-           filter(between(week, 5, 21)) %>% 
+           filter(between(week, 5, 29)) %>% 
            group_by(codmun6, year, week) %>% 
            summarise(nfetal = n()) %>% 
            ungroup()
@@ -737,7 +774,7 @@ fetal_yr = fetal_yr %>% filter(year > 2011) %>%
  births_yr$totalconcep = births_yr$nconcep + births_yr$nfetal
 
  # Save
- write.csv(births_yr, "concep_week_mun.csv")
+ write.csv(births_yr, "concep_week_mun_new.csv")
  
  #######################################################################
 
@@ -817,7 +854,7 @@ for (i in 0:6) {
       data_munw = data_munw %>% group_by(codmun6) %>% 
                   filter(sum(isolated, na.rm = TRUE) != 0) %>% ungroup()
       
-      data_munw = data_munw %>% filter(between(week, 5, 21))
+      data_munw = data_munw %>% filter(between(week, 5, 29))
       
       # Add weekday label
       data_munw$weekday = weekdays(data_munw$s_date)
@@ -830,15 +867,14 @@ for (i in 0:6) {
 weekdays_df = weekdays_df %>% bind_rows()
 
 # Save
-write.csv(weekdays_df, "data_weekdays.csv")
+write.csv(weekdays_df, "data_weekdays_new.csv")
 
 #######################################################################
 
 # Step 7: Total conceptions in Brazil by month (for chart)
 
 # We'll group data by year and month and calculate total conceptions
-births_br = births %>% filter(year > 2011) %>% 
-            filter(between(month, 1, 5)) %>% 
+births_br = births %>% filter(year > 2011 & year < 2021) %>% 
             group_by(year, month) %>% 
             summarise(nconcep = n(),
                       nconcep_educ_low = sum(mother_educ < 3),
@@ -847,7 +883,7 @@ births_br = births %>% filter(year > 2011) %>%
                       nconcep_age_old = sum(mother_age >= 25)) %>% 
             ungroup() 
 
-fetal_br = fetal %>% filter(year > 2011) %>% 
+fetal_br = fetal %>% filter(year > 2011 & year < 2021) %>% 
            filter(between(month, 1, 5)) %>% 
            group_by(year, month) %>% 
            summarise(nfetal = n(),
@@ -890,7 +926,7 @@ fetal_uf = left_join(ibge, fetal, by = c("codmun6", "microregion"))
 
 # Group by state, year and month
 births_uf = births_uf %>% filter(year > 2017) %>% 
-            filter(between(month, 1, 5)) %>% 
+            filter(between(month, 1, 7)) %>% 
             group_by(year, month, UF) %>% 
             summarise(nconcep = n(),
                       nconcep_educ_low = sum(mother_educ < 3),
@@ -900,7 +936,7 @@ births_uf = births_uf %>% filter(year > 2017) %>%
             ungroup() 
           
 fetal_uf = fetal_uf %>% filter(year > 2017) %>% 
-           filter(between(month, 1, 5)) %>% 
+           filter(between(month, 1, 7)) %>% 
            group_by(year, month, UF) %>% 
            summarise(nfetal = n(),
                      nfetal_educ_low = sum(mother_educ < 3),
@@ -929,6 +965,6 @@ births_uf$totalconcep_age_young = births_uf$nconcep_age_young + births_uf$nfetal
 births_uf$totalconcep_age_old = births_uf$nconcep_age_old + births_uf$nfetal_age_old
 
 # Save
-write.csv(births_uf, "data_births_uf.csv")
+write.csv(births_uf, "data_births_uf_new.csv")
 
 #######################################################################
