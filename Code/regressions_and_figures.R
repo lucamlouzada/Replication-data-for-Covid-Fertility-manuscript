@@ -1,9 +1,9 @@
 # regressions_and_figures.R
 
 # Author: Luca Moreno-Louzada
-# 2021
+# 2023
 # Code for manuscript:
-# "Staying at Home during Covid Outbreaks Leads to Less Conceptions"
+# "The relationship between staying at home during the pandemic and the number of conceptions: a national panel data analysis"
 # Luca Moreno-Louzada and Naercio Menezes-Filho
 
 # This code:
@@ -17,7 +17,7 @@
 
 rm(list = ls())
 
-setwd("C:/Users/lucam/OneDrive/Área de Trabalho/Economia/COVID SINASC")
+setwd("P:/Luca Louzada/COVID-19 Births/Final")
 
 library(dplyr) # data wrangling
 library(read.dbc) # read .dbc files
@@ -37,6 +37,7 @@ library(purrr) # applying functions
 library(foreign) # save .dta files
 library(lfe) # fixed effects models
 library(sf) # dealing with maps
+library(ggpubr) # other data visualization
 
 options(scipen = 999) # disable scientific notation
 
@@ -44,7 +45,7 @@ options(scipen = 999) # disable scientific notation
 
 # Step 1: Main Regression Table
 
-data_main = fread("data_2020_mun.csv")
+data_main = fread("data_2020_mun_final.csv") %>% filter(year < 2021)
 
 fdf = data_main %>%  
       mutate(msm10 = deaths == 0 | totalconcep < 10,
@@ -59,6 +60,10 @@ fdf = data_main %>%
 fdf = fdf %>% 
       mutate(lm = log(deaths),
              lb = log(totalconcep),
+             lbage1 = log(totalconcep_age_first),
+             lbage2 = log(totalconcep_age_second),
+            lbage3 = log(totalconcep_age_third),
+            lbage4 = log(totalconcep_age_fourth),
              lbagey = log(totalconcep_age_young),
              lbageo = log(totalconcep_age_old),
              lbled = log(totalconcep_educ_low),
@@ -72,6 +77,10 @@ fdf = fdf %>%
       mutate(disol = isolated - lag(isolated, 1),
              dlm = lm - lag(lm, 1),
              dlb = lb - lag(lb, 1),
+             dlbage1 = lbage1 - lag(lbage1, 1),
+             dlbage2 = lbage2 - lag(lbage2, 1),
+             dlbage3 = lbage3 - lag(lbage3, 1),
+             dlbage4 = lbage4 - lag(lbage4, 1),
              dlbagey = lbagey - lag(lbagey, 1),
              dlbageo = lbageo - lag(lbageo, 1),
              dlbled = lbled - lag(lbled, 1),
@@ -82,10 +91,12 @@ fdf = fdf %>%
              db = totalconcep - lag(totalconcep, 1)) %>%  
      ungroup() %>% 
      mutate_at(vars(dlm, dlb, disol,
+                    dlbage1, dlbage2, dlbage3, dlbage4,
                     dlbagey, dlbageo, 
                     dlbled, dlbhed, dlbkno, dlbkye), ~ifelse(is.nan(.), NA, .)) %>% 
      mutate_at(vars(dlm, dlb, disol,
                     dlbagey, dlbageo,
+                    dlbage1, dlbage2, dlbage3, dlbage4,
                     dlbled, dlbhed, dlbkno, dlbkye), ~ifelse(is.infinite(.), NA, .)) 
 
 fdf$codmun6 = factor(fdf$codmun6)
@@ -110,7 +121,7 @@ m4 = felm(dlb ~ disol + dlm | week + codmun6 + month + codmun6:month| 0 | codmun
           weights = data$popm, cmethod = "reghdfe")
 
 # Microregion
-data_mic = fread("data_2020_mic.csv")
+data_mic = fread("data_2020_mic_new.csv")
 
 mdf = data_mic %>%  
       mutate(msm10 = deaths == 0 | totalconcep < 10) %>% 
@@ -152,7 +163,7 @@ m5 = felm(dlb ~ disol + dlm| week + microregion + month + microregion:month| 0 |
            weights = data$pop, cmethod = "reghdfe")
 
 # Monthly
-data_mon = fread("data_monthly_mun.csv")
+data_mon = fread("data_monthly_mun_new.csv")
 
 ndf = data_mon %>%  
       mutate(msm10 = deaths == 0 | totalconcep < 10) %>% 
@@ -200,7 +211,7 @@ stargazer(m1, m2, m3, m4, m5, m6, type = "html",
                            c("Month interactions:", "", "", "", "Y", "Y", ""),
                            c("Group by microregion:", rep("", 4), "Y", ""),
                            c("Group by month:", rep("", 5), "Y")),
-          out = "regression_main.doc")
+          out = "./PLOS R&R 2/regression_main_new.doc")
 
 ###########################################################################
 
@@ -234,7 +245,7 @@ stargazer(m7, m8, m9, m10, m11, m12, type = "html",
           dep.var.caption = "Delta ln Conceptions",
           column.labels= c("Poorer", "Richer", "Larger", "Smaller", "Urban", "Rural"),
           covariate.labels = c("Delta Isolation", "Delta ln Deaths"),
-          out = "regression_mun.doc")
+          out = "./PLOS R&R 2/regression_mun_new.doc")
 
 
 # Women
@@ -246,28 +257,36 @@ m13 = felm(dlbled ~ disol + dlm | week + codmun6 + month + codmun6:month| 0 | co
 m14 = felm(dlbhed ~ disol + dlm | week + codmun6 + month + codmun6:month| 0 | codmun6, data = df, 
           weights = df$popm, cmethod = "reghdfe")
 
-m15 = felm(dlbagey ~ disol + dlm | week + codmun6 + month + codmun6:month| 0 | codmun6, data = df, 
-          weights = df$popm, cmethod = "reghdfe")
-
-m16 = felm(dlbageo ~ disol + dlm | week + codmun6 + month + codmun6:month| 0 | codmun6, data = df, 
+m15 = felm(dlbkye ~ disol + dlm | week + codmun6 + month + codmun6:month| 0 | codmun6, data = df, 
            weights = df$popm, cmethod = "reghdfe")
 
-m17 = felm(dlbkye ~ disol + dlm | week + codmun6 + month + codmun6:month| 0 | codmun6, data = df, 
+m16 = felm(dlbkno ~ disol + dlm | week + codmun6 + month + codmun6:month| 0 | codmun6, data = df, 
            weights = df$popm, cmethod = "reghdfe")
 
-m18 = felm(dlbkno ~ disol + dlm | week + codmun6 + month + codmun6:month| 0 | codmun6, data = df, 
-           weights = df$popm, cmethod = "reghdfe")
+m17 =  felm(dlbage1 ~ disol + dlm | week + codmun6 + month + codmun6:month| 0 | codmun6, data = df, 
+                 weights = df$popm, cmethod = "reghdfe")
 
-stargazer(m13, m14, m15, m16, m17, m18, type = "html",
+m18 =  felm(dlbage2 ~ disol + dlm | week + codmun6 + month + codmun6:month| 0 | codmun6, data = df, 
+            weights = df$popm, cmethod = "reghdfe")
+m19 =  felm(dlbage3 ~ disol + dlm | week + codmun6 + month + codmun6:month| 0 | codmun6, data = df, 
+            weights = df$popm, cmethod = "reghdfe")
+m20 =  felm(dlbage4 ~ disol + dlm | week + codmun6 + month + codmun6:month| 0 | codmun6, data = df, 
+            weights = df$popm, cmethod = "reghdfe")
+
+
+stargazer(m13, m14, m15, m16, m17, m18, m19, m20, type = "html",
           title = "Heterogeneous effects",
           keep.stat = c("n", "rsq"),
           dep.var.labels.include = F,
           dep.var.caption = "Delta ln Conceptions",
           column.labels= c("Less Educ", "More Educ", 
-                           "Younger", "Older",
-                           "Previous kids", "No kids"),
+                           "Previous kids", "No kids",
+                           "Aged < 21", "Aged 21-25",
+                           "Aged 26-32", "Aged > 32"
+                           ),
           covariate.labels = c("Delta Isolation", "Delta ln Deaths"),
-          out = "regression_wom.doc")
+          out = "./PLOS R&R 2/regression_wom_final.doc")
+
 
 ###########################################################################
 
@@ -317,14 +336,14 @@ stargazer(m19, m20, m21, m22, m23, m24, m25,  type = "html",
                              "Y", "Y"),
                            c("Month dummies:", "Y", "Y", "", "Y","Y" ,
                              "Y","Y")),
-          out = "regression_rob.doc")
+          out = "./PLOS R&R 2/regression_rob_new.doc")
 
 ###########################################################################
 
 # Step 4: Weekdays tests
 
 # We'll run the main regression with the dataset grouped by different weekdays
-weekdays = fread("data_weekdays.csv")
+weekdays = fread("data_weekdays_new.csv", encoding = "Latin-1")
 
 fdf = weekdays %>%  
         mutate(msm10 = deaths == 0 | totalconcep < 10) %>% 
@@ -348,31 +367,31 @@ msmdf = fdf %>% filter(msm10 == 0)
 msmdf$month = factor(msmdf$month)
 msmdf$codmun6 = factor(msmdf$codmun6)
 
-df = msmdf %>% filter(weekday == "Monday")
+df = msmdf %>% filter(weekday == "segunda-feira")
 m26 =felm(dlb ~ disol + dlm| week + codmun6 + month + codmun6:month| 0 | codmun6, data = df, 
           weights = df$popm, cmethod = "reghdfe")
 
-df = msmdf %>% filter(weekday == "Tuesday")
+df = msmdf %>% filter(weekday == "terça-feira")
 m27 = felm(dlb ~ disol + dlm| week + codmun6 + month + codmun6:month| 0 | codmun6, data = df, 
            weights = df$popm, cmethod = "reghdfe")
 
-df = msmdf %>% filter(weekday == "Wednesday")
+df = msmdf %>% filter(weekday == "quarta-feira")
 m28 = felm(dlb ~ disol + dlm| week + codmun6 + month + codmun6:month| 0 | codmun6, data = df, 
            weights = df$popm, cmethod = "reghdfe")
 
-df = msmdf %>% filter(weekday == "Thursday")
+df = msmdf %>% filter(weekday == "quinta-feira")
 m29 = felm(dlb ~ disol + dlm| week + codmun6 + month + codmun6:month| 0 | codmun6, data = df, 
            weights = df$popm, cmethod = "reghdfe")
 
-df = msmdf %>% filter(weekday == "Friday")
+df = msmdf %>% filter(weekday == "sexta-feira")
 m30 = felm(dlb ~ disol + dlm| week + codmun6 + month + codmun6:month| 0 | codmun6, data = df, 
            weights = df$popm, cmethod = "reghdfe")
 
-df = msmdf %>% filter(weekday == "Saturday")
+df = msmdf %>% filter(weekday == "sábado")
 m31 = felm(dlb ~ disol + dlm| week + codmun6 + month + codmun6:month| 0 | codmun6, data = df, 
            weights = df$popm, cmethod = "reghdfe")
 
-df = msmdf %>% filter(weekday == "Sunday")
+df = msmdf %>% filter(weekday == "domingo")
 m32 = felm(dlb ~ disol + dlm| week + codmun6 + month + codmun6:month| 0 | codmun6, data = df, 
            weights = df$popm, cmethod = "reghdfe")
 
@@ -384,14 +403,14 @@ stargazer(m26, m27, m28, m29, m30, m31, m32, type = "html",
           column.labels= c("Monday", "Tuesday", "Wednesday", "Thursday",
                            "Friday", "Saturday", "Sunday"),
           covariate.labels = c("Delta Isolation", "Delta deaths"),
-          out = "regression_week.doc")
+          out = "./PLOS R&R 2/regression_week_new.doc")
 
 ###########################################################################
 
 # Step 5: Placebo tests
 
 # We'll join our dataset with conception data for other years
-data_years = fread("concep_week_mun.csv") %>% 
+data_years = fread("concep_week_mun_new.csv") %>% 
              select(codmun6, year, week, totalconcep)
 
 data_join = data_main %>% select(-totalconcep)
@@ -443,13 +462,14 @@ for (i in 2012:2020) {
 tbl = tbl %>% bind_rows()
 
 # Plot coefficients
-ggplot(data = tbl, aes(x = factor(year), y = estimate)) + geom_point() +
+plot =  ggplot(data = tbl, aes(x = factor(year), y = estimate)) + geom_point() +
         geom_errorbar(aes(ymax = conf.high, ymin = conf.low,  width=.1)) +
         ylab("Coefficient") +
         xlab("Year") + 
         theme_classic() + geom_hline(yintercept=0, linetype='dotted', col = "red2", size = 0.8)+
-        scale_x_discrete(labels = c(2012:2020)) +
-        theme(text = element_text(family = "Helvetica"))
+        scale_x_discrete(labels = c(2012:2020)) 
+
+ggsave(plot = plot, filename = "./PLOS R&R 2/Figures/Figure_S1.tiff", dpi = 500, width = 10, height = 6)
 
 ###########################################################################
 
@@ -458,46 +478,50 @@ ggplot(data = tbl, aes(x = factor(year), y = estimate)) + geom_point() +
 # We use numbers calculated by Stata (see file Margins.do)
 
 # Main regression (column 4)
-#  margins, at(disol=(-0.05 -0.019 0 0.026 0.05 0.09))
+#  margins, at(disol=(-0.05 -0.019 0 0.026 0.09))
+
 #------------------------------------------------------------------------------
-#|            Delta-method
+#  |            Delta-method
 #|     Margin   Std. Err.      z    P>|z|     [95% Conf. Interval]
 #-------------+----------------------------------------------------------------
-#_at |
-#1  |   .0369346   .0110555     3.34   0.001     .0152661    .0586031
-#2  |   .0198127   .0052896     3.75   0.000     .0094453    .0301801
-#3  |   .0093187   .0017556     5.31   0.000     .0058777    .0127596
-#4  |  -.0050416   .0030803    -1.64   0.102    -.0110789    .0009956
-#5 |    -.0182973   .0075443    -2.43   0.015    -.0330838   -.0035108
-#6  |  -.0403901   .0149842    -2.70   0.007    -.0697585   -.0110216
+#  _at |
+# 1  |   .0313938   .0091653     3.43   0.001       .01343    .0493575
+#2  |   .0158972   .0040108     3.96   0.000     .0080363    .0237582
+#3  |   .0063993   .0008515     7.52   0.000     .0047304    .0080683
+#4  |  -.0065978   .0034717    -1.90   0.057    -.0134021    .0002066
+#5  |  -.0185951   .0074623    -2.49   0.013    -.0332209   -.0039692
+#6  |  -.0385906   .0141134    -2.73   0.006    -.0662523   -.0109289
+#------------------------------------------------------------------------------
+  
+  
 
 
-maintbl = tibble(predict = c(.0369346,
-                             .0198127,
-                             .0093187,
-                            -.0050416,
-                            -.0182973,
-                            -.0403901),
+maintbl = tibble(predict = c(.0313938,
+                             .0158972,
+                             .0063993,
+                             -.0065978 ,
+                             -.0185951,
+                             -.0385906),
                  isol = c(-0.05,
                           -0.019,
                            0,
                            0.026,
                            0.05,
                            0.09),
-                 conf.low = c(.0152661,
-                              .0094453,
-                              .0058777,
-                              -.0110789,
-                              -.0330838,
-                              -.0697585),
-                 conf.high = c(.0586031,
-                               .0301801,
-                               .0127596,
-                               .0009956,
-                               -.0035108,
-                               -.0110216))
+                 conf.low = c(.01343,
+                              .0080363,
+                              .0047304,
+                              -.0134021,
+                              -.0332209,
+                              -.0662523),
+                 conf.high = c(.0493575,
+                               .0237582,
+                               .0080683,
+                               .0002066,
+                               -.0039692,
+                               -.0109289))
 
-ggplot(data = maintbl, aes(x = isol, y = predict)) + 
+plot =  ggplot(data = maintbl, aes(x = isol, y = predict)) + 
         geom_bar(stat = "identity", fill = "#3B4992") +
         geom_errorbar(aes(ymax = conf.high, ymin = conf.low), width = .01, size = 1) +
         geom_hline(yintercept=0, linetype='dashed', col = "#BB0021FF", size = 1.2)+
@@ -506,6 +530,7 @@ ggplot(data = maintbl, aes(x = isol, y = predict)) +
         theme_classic() +
         scale_x_continuous(breaks = c(-0.05, -0.019, 0, 0.026, 0.05, 0.09))
 
+ggsave(plot = plot, filename = "./Article/Figures_new2/Figure_3A.tiff", dpi = 500, width = 10, height = 6)
 
 # Margins plot 9pp
 
@@ -516,64 +541,76 @@ ggplot(data = maintbl, aes(x = isol, y = predict)) +
 #|     Margin   Std. Err.      z    P>|z|     [95% Conf. Interval]
 
 # 
-# Rich |  -.0418371   .0172325    -2.43   0.015    -.0756122   -.0080621
-# Poor |  -.0286973   .0346156    -0.83   0.407    -.0965427    .0391481
-# Urban |  -.0416514     .01524    -2.73   0.006    -.0715214   -.0117815
-# Rural | - .0997892   .1221155    -0.82   0.414    -.3391312    .1395528
-# Large |  -.0395408   .0177277    -2.23   0.026    -.0742865   -.0047952
-# Small |   -.0573708   .0307981    -1.86   0.062    -.1177341    .0029924
+# Rich |   -.0395243   .0159793    -2.47   0.013    -.0708431   -.0082055
+# Poor |    -.0368846   .0315297    -1.17   0.242    -.0986817    .0249125
+# Urban |    -.0399925   .0144223    -2.77   0.006    -.0682597   -.0117253
+# Rural |  -.0831898   .0679901    -1.22   0.221    -.2164479    .0500684
+# Large |    -.0418692   .0166911    -2.51   0.012     -.074583   -.0091553
+# Small |     -.0378896   .0276033    -1.37   0.170    -.0919912    .0162119
 
-# High |  -.0448192   .0176999    -2.53   0.011    -.0795103   -.0101281
-# Low | -.0375544   .0311007    -1.21   0.227    -.0985107    .0234018
-# Young  -.0824863   .0244688    -3.37   0.001    -.1304443   -.0345284
-# Old |  -.0170619   .0193616    -0.88   0.378    -.0550099    .0208861
-# No K | -.0479975   .0245004    -1.96   0.050    -.0960174    .0000224
-# Ye K|   -.0375375   .0228194    -1.64   0.100    -.0822627    .0071878
+# High |   -.0402345   .0164928    -2.44   0.015    -.0725598   -.0079093
+# Low |  -.0339292   .0291972    -1.16   0.245    -.0911546    .0232962
+# No K |  -.0107084   .0252173    -0.42   0.671    -.0601334    .0387166
+# Ye K|    -.0532698   .0216048    -2.47   0.014    -.0956145   -.0109252
+# Age 1   -.0256051   .0390969    -0.65   0.513    -.1022336    .0510233
+# Age 2|    -.0973456   .0270123    -3.60   0.000    -.1502888   -.0444025
+# Age 3|   -.0196996   .0255894    -0.77   0.441     -.069854    .0304547
+# Age 4|    -.0019337   .0273573    -0.07   0.944     -.055553    .0516857
 
 
-marginswom = tibble(predict = c(-.0448192,
-                                -.0375544,
-                                -.0824863,
-                                -.0170619,
-                                -.0479975,
-                                -.0375375),
-                   conf.low = c(-.0795103,
-                                 -.0985107,
-                                 -.1304443,
-                                 -.0550099,
-                                 -.0960174,
-                                 -.0822627),
-                   conf.high = c(-.0101281,
-                                 .0234018,
-                                 -.0345284,
-                                 .0208861,
-                                 .0000224,
-                                 .0071878),
+marginswom = tibble(predict = c(-.0402345,
+                                -.0339292,
+                                -.0107084,
+                                -.0532698,
+                                -.0256051,
+                                -.0973456,
+                                -.0196996,
+                                -.0019337),
+                   conf.low = c(-.0725598,
+                                -.0911546,
+                                -.0601334,
+                                -.0956145 ,
+                                -.1022336,
+                                -.1502888,
+                                -.069854,
+                                -.055553
+                                ),
+                   conf.high = c(-.0079093,
+                                 .0232962,
+                                 .0387166,
+                                 -.0109252,
+                                 .0510233,
+                                 -.0444025,
+                                 .0304547,
+                                 .0516857
+                                 ),
                    group = c("More Educated",
                              "Less Educated",
-                             "Younger",
-                             "Older",
                              "No kids",
-                              "More than 1 kid"))
+                              "1 kid or more",
+                             "Aged < 21",
+                             "Aged 21-25",
+                             "Aged 26-32",
+                             "Aged > 32"))
 
-marginsmun = tibble(predict = c(-.0418371,
-                                -.0286973,
-                                -.0416514,
-                                -.0997892,
-                                -.0395408,
-                                -.0573708),
-                 conf.low = c(-.0756122,
-                              -.0965427,
-                              -.0715214,
-                              -.3391312,
-                              -.0742865,
-                              -.1177341),
-                 conf.high = c(-.0080621,
-                               .0391481,
-                               -.0117815,
-                               .1395528,
-                               -.0047952,
-                               .0029924),
+marginsmun = tibble(predict = c(-.0395243,
+                                -.0368846,
+                                -.0399925,
+                                -.0831898,
+                                -.0418692,
+                                -.0378896),
+                    conf.low = c(-.0708431,
+                                 -.0986817,
+                                 -.0682597,
+                                 -.2164479 ,
+                                 -.074583,
+                                 -.0919912),
+                    conf.high = c(-.0082055,
+                                  .0249125,
+                                  -.0117253,
+                                  .0500684,
+                                  -.0091553,
+                                  .0162119),
                  group = c("Richer",
                            "Poorer",
                            "Urban",
@@ -590,13 +627,15 @@ marginsmun$group = factor(marginsmun$group, levels = c("Richer",
 
 
 marginswom$group = factor(marginswom$group, levels = c("More Educated",
-                                                        "Less Educated",
-                                                        "Younger",
-                                                        "Older",
-                                                        "No kids",
-                                                        "More than 1 kid"))
+                                                       "Less Educated",
+                                                       "No kids",
+                                                       "1 kid or more",
+                                                       "Aged < 21",
+                                                       "Aged 21-25",
+                                                       "Aged 26-32",
+                                                       "Aged > 32"))
 # Plots
-ggplot(data = marginsmun, aes(x = group, y = predict)) + 
+plot = ggplot(data = marginsmun, aes(x = group, y = predict)) + 
        geom_bar(stat = "identity", fill  = rep(c("#BB0021", "#3B4992"), 3)) +
        geom_errorbar(aes(ymax = conf.high, ymin = conf.low), width = 0.2, size = 1) +
        geom_hline(yintercept=0, color = "black", linetype='dashed', size = 1) +
@@ -604,19 +643,25 @@ ggplot(data = marginsmun, aes(x = group, y = predict)) +
        ylab("Marginal effect of isolation on conceptions") +
        xlab("Group")
 
-ggplot(data = marginswom, aes(x = group, y = predict)) + 
-       geom_bar(stat = "identity", fill  = rep(c("#BB0021", "#3B4992"), 3)) +
+ggsave(plot = plot, filename = "./Article/Figures_new2/Figure_3B.tiff", dpi = 500, width = 10, height = 6)
+
+
+plot = ggplot(data = marginswom, aes(x = group, y = predict)) + 
+       geom_bar(stat = "identity", fill  = rep(c("#BB0021", "#3B4992"), 4)) +
        geom_errorbar(aes(ymax = conf.high, ymin = conf.low), width = 0.2, size = 1) +
        geom_hline(yintercept=0, color = "black", linetype='dashed', size = 1) +
        theme_classic() +
        ylab("Marginal effect of isolation on conceptions") +
        xlab("Group")
+
+ggsave(plot = plot, filename = "./PLOS R&R 2/Figures/Figure_3C.tiff", dpi = 500, width = 10, height = 6)
+
 
 ###########################################################################
 
 # Step 7: Conceptions plot
 
-data = fread("data_births_br.csv")
+data = fread("data_births_br.csv") 
 
 data = data %>% 
         mutate(days = case_when(month == 1 ~ 31,
@@ -624,6 +669,13 @@ data = data %>%
                                 month == 3 ~ 31,
                                 month == 4 ~ 30,
                                 month == 5 ~ 31,
+                                month == 6 ~ 30,
+                                month == 7 ~ 31,
+                                month == 8 ~ 31,
+                                month == 9 ~ 30,
+                                month == 10 ~ 31,
+                                month == 11 ~ 30,
+                                month == 12 ~ 31,
                                 month == 2 & year == 2020 ~ 29,
                                 month == 2 & year == 2016 ~ 29,
                                 month == 2 & year == 2012 ~ 29)) %>% 
@@ -645,21 +697,25 @@ data = data %>%
                  max = mean(max),
                  min = mean(min)) 
   
-ggplot(data, aes(x=factor(month), y= dailyconcep, group = factor(categ))) +
+plot = ggplot(data, aes(x=factor(month), y= dailyconcep, group = factor(categ))) +
        geom_line(aes(color = factor(categ)), size = 1.2) +
        scale_color_manual(values=c("2012-2013" = "#A20056FF",
                                    "2014-2015" = "#808180FF",
                                    "2016-2017" = "#008280FF",
                                    "2018-2019" = "#3B4992FF",
                                    "2020" = "#BB0021FF")) +
-       scale_x_discrete(labels = c("Jan", "Feb", "Mar", "Apr", "May")) +
+       scale_x_discrete(labels = c("Jan", "Feb", "Mar", "Apr", "May",
+                                   "Jun", "Jul", "Aug", "Sep", "Oct",
+                                   "Nov", "Dec")) +
        ylab("Daily Conceptions") + 
        xlab("Month")   +
        labs(color = "Year", fill = "") +
        geom_ribbon(aes(x = month, ymin = min, ymax = max, fill = "range"), 
                    alpha = 0.1, fill = "grey") +
        theme_classic() 
-       
+
+ggsave(plot = plot, filename = "./Article/Figures_new2/Figure_1A.tiff", dpi = 500, width = 10, height = 6)
+
 ###########################################################################
 
 # Step 8: Isolation plot
@@ -770,25 +826,27 @@ isolation = isolation %>%
             group_by(poor, codmun6) %>%
             filter(n() == 180) %>% ungroup() %>% 
             group_by(poor, dt) %>% 
-            summarise(isolated = weighted.mean(isolated, popm)) %>% 
-            filter(dt < as.Date("2020-06-01"))
+            summarise(isolated = weighted.mean(isolated, popm)) 
 
 # Plot
-  ggplot(isolation, aes(x = dt, y = isolated * 100, group = poor)) + 
-         geom_line(aes(color = poor), size = 1) +
-         ylab("Mean Isolation (%)") + 
-         xlab("Date")   +
-         theme_classic() +
-         scale_color_manual(values = c("#BB0021FF", "#3B4992FF"),
-                            name = "Municipalities",
-                            labels = c("Richer", "Poorer")) +
-         scale_x_date(date_breaks = "1 month", date_labels = "%b")
+plot = ggplot(isolation, aes(x = dt, y = isolated * 100, group = poor)) + 
+       geom_line(aes(color = poor), size = 1) +
+       ylab("Mean Isolation (%)") + 
+       xlab("Date")   +
+       theme_classic() +
+       scale_color_manual(values = c("#BB0021FF", "#3B4992FF"),
+                          name = "Municipalities",
+                          labels = c("Richer", "Poorer")) +
+       scale_x_date(date_breaks = "1 month", date_labels = "%b")
 
+ggsave(plot = plot, filename = "./Article/Figures_new2/Figure_2A.tiff", dpi = 500, width = 10, height = 6)
+
+#
 ###########################################################################
   
 # Step 9: Map and scatterplot
   
-data = fread("data_monthly_mun.csv")
+data = fread("data_monthly_mun_new.csv")
   
 data = data %>% 
        group_by(month, UF) %>% 
@@ -796,7 +854,7 @@ data = data %>%
        ungroup() %>% 
        mutate(year = 2020)
 
-data_uf = fread("data_births_uf.csv")
+data_uf = fread("data_births_uf_new.csv")
 
 data = right_join(data, data_uf, by = c("UF", "month", "year"))
   
@@ -804,16 +862,16 @@ df = data %>%
      mutate(lb = log(totalconcep)) %>% 
      arrange(UF, year, month) %>% 
      group_by(UF) %>% 
-     mutate(ddlb = lb - lag(lb, 1) - (lag(lb, 5) - lag(lb, 6)),
+     mutate(ddlb = lb - lag(lb, 1) - (lag(lb, 7) - lag(lb, 8)),
             disol = isolated - lag(isolated, 1)) %>% 
      ungroup() %>% 
-     filter(year == 2020 & month > 2)
+     filter(year == 2020 & month > 1)
   
 df$month = factor(df$month)
-levels(df$month) = c("Mar", "Apr", "May")
+levels(df$month) = c("Feb", "Mar", "Apr", "May", "Jun", "Jul")
 
 # Scatterplot of isolation and conception double differences  
-ggplot(data = df, aes(x = disol, y = ddlb)) +
+plot = ggplot(data = df, aes(x = disol, y = ddlb)) +
        geom_point(size = 2.5, alpha = 0.9, color = "black") + 
        geom_smooth(method = "lm", color = "firebrick2", size = 1.6, se = FALSE) + 
        stat_cor(method = "pearson", aes(label = ..r.label..)) +
@@ -826,6 +884,8 @@ ggplot(data = df, aes(x = disol, y = ddlb)) +
                                                face = "bold")) +
        theme(text = element_text(size = 14))
 
+ggsave(plot = plot, filename = "./Article/Figures_new2/Figure_2B.tiff", dpi = 500, width = 6, height = 10)
+
 
 # Map with double differences by state
 map = read_sf("./BR_UF_2020/BR_UF_2020.shp", layer="BR_UF_2020")
@@ -833,12 +893,12 @@ map = read_sf("./BR_UF_2020/BR_UF_2020.shp", layer="BR_UF_2020")
 d = left_join(df, map, by = c("UF" = "SIGLA_UF"))
   
 d$month = factor(d$month)
-levels(d$month) = c("Mar", "Apr", "May")
+levels(d$month) = c("Feb", "Mar", "Apr", "May", "Jun", "Jul")
   
 d$ddlb[d$ddlb < -0.1] = -0.1
 d$ddlb[d$ddlb  > 0.1] = 0.1
 
-ggplot(data = d) +
+plot = ggplot(data = d) +
        geom_sf(data = d$geometry, color = NA,
                aes(fill = d$ddlb)) +
        theme_void() +
@@ -858,6 +918,9 @@ ggplot(data = d) +
                                            title.hjust = 0.5,
                                            barheight = 0.5,
                                            barwidth = 15))
+
+ggsave(plot = plot, filename = "./Article/Figures_new2/Figure_1B.tiff", dpi = 500, width = 10, height = 6)
+
 
 ###########################################################################
   
