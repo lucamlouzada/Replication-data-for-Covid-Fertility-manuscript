@@ -1,9 +1,9 @@
 #  append_data.R
 
 # Author: Luca Moreno-Louzada
-# 2021
+# 2023
 # Code for manuscript:
-# "Staying at Home during Covid Outbreaks Leads to Less Conceptions"
+# "The relationship between staying at home during the pandemic and the number of conceptions: a national panel data analysis"
 # Luca Moreno-Louzada and Naercio Menezes-Filho
 
 # This code:
@@ -96,12 +96,12 @@ for (i in 1:length(data_files)){
 
 
 # 2021 Births
-df_21 = read.dbf("DNBR21DA.DBF") %>%  select(CODMUNRES, DTNASC, SEXO, ESTCIVMAE,
+df_21 = read.dbf("DN21OPEN.dbf") %>%  select(CODMUNRES, DTNASC, SEXO, ESTCIVMAE,
                                      ESCMAE2010, QTDFILVIVO, GRAVIDEZ,
                                      PARTO, CONSULTAS, RACACOR, IDADEMAE,
                                      SEMAGESTAC, PESO)
 
-write_csv(df_21, file = "births2021.csv")
+write_csv(df_21, file = "births2021_updated.csv")
 
 # 2012-2014 births
 data_files = list.files("./SINASC_11_14", full.names = TRUE)
